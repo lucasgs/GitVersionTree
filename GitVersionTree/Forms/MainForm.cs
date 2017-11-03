@@ -22,6 +22,8 @@ namespace GitVersionTree
         private string LogFilename = Directory.GetParent(Application.ExecutablePath) + @"\" + Application.ProductName + ".log";
         string RepositoryName;
 
+		IConfiguration configuration = new PortableConfiguration();
+
         public MainForm()
         {
             InitializeComponent();
@@ -38,15 +40,15 @@ namespace GitVersionTree
         {
             OpenFileDialog BrowseOpenFileDialog = new OpenFileDialog();
             BrowseOpenFileDialog.Title = "Select git.exe";
-            if (!String.IsNullOrEmpty(Reg.Read("GitPath")))
+			if (!String.IsNullOrEmpty(configuration.Read("GitPath")))
             {
-                BrowseOpenFileDialog.InitialDirectory = Reg.Read("GitPath");
+				BrowseOpenFileDialog.InitialDirectory = configuration.Read("GitPath");
             }
             BrowseOpenFileDialog.FileName = "git.exe";
             BrowseOpenFileDialog.Filter = "Git Application (git.exe)|git.exe";
             if (BrowseOpenFileDialog.ShowDialog() == DialogResult.OK)
             {
-                Reg.Write("GitPath", BrowseOpenFileDialog.FileName);
+				configuration.Write("GitPath", BrowseOpenFileDialog.FileName);
                 RefreshPath();
             }
         }
@@ -55,15 +57,15 @@ namespace GitVersionTree
         {
             OpenFileDialog BrowseOpenFileDialog = new OpenFileDialog();
             BrowseOpenFileDialog.Title = "Select dot.exe";
-            if (!String.IsNullOrEmpty(Reg.Read("GraphvizPath")))
+			if (!String.IsNullOrEmpty(configuration.Read("GraphvizPath")))
             {
-                BrowseOpenFileDialog.InitialDirectory = Reg.Read("GraphvizPath");
+				BrowseOpenFileDialog.InitialDirectory = configuration.Read("GraphvizPath");
             }
             BrowseOpenFileDialog.FileName = "dot.exe";
             BrowseOpenFileDialog.Filter = "Graphviz Dot Application (dot.exe)|dot.exe";
             if (BrowseOpenFileDialog.ShowDialog() == DialogResult.OK)
             {
-                Reg.Write("GraphvizPath", BrowseOpenFileDialog.FileName);
+				configuration.Write("GraphvizPath", BrowseOpenFileDialog.FileName);
                 RefreshPath();
             }
         }
@@ -73,22 +75,22 @@ namespace GitVersionTree
             FolderBrowserDialog BrowseFolderBrowserDialog = new FolderBrowserDialog();
             BrowseFolderBrowserDialog.Description = "Select Git repository";
             BrowseFolderBrowserDialog.ShowNewFolderButton = false;
-            if (!String.IsNullOrEmpty(Reg.Read("GitRepositoryPath")))
+			if (!String.IsNullOrEmpty(configuration.Read("GitRepositoryPath")))
             {
-                BrowseFolderBrowserDialog.SelectedPath = Reg.Read("GitRepositoryPath");
+				BrowseFolderBrowserDialog.SelectedPath = configuration.Read("GitRepositoryPath");
             }
             if (BrowseFolderBrowserDialog.ShowDialog() == DialogResult.OK)
             {
-                Reg.Write("GitRepositoryPath", BrowseFolderBrowserDialog.SelectedPath);
+				configuration.Write("GitRepositoryPath", BrowseFolderBrowserDialog.SelectedPath);
                 RefreshPath();
             }
         }
 
         private void GenerateButton_Click(object sender, EventArgs e)
         {
-            if (String.IsNullOrEmpty(Reg.Read("GitPath")) ||
-                String.IsNullOrEmpty(Reg.Read("GraphvizPath")) ||
-                String.IsNullOrEmpty(Reg.Read("GitRepositoryPath")))
+			if (String.IsNullOrEmpty(configuration.Read("GitPath")) ||
+				String.IsNullOrEmpty(configuration.Read("GraphvizPath")) ||
+				String.IsNullOrEmpty(configuration.Read("GitRepositoryPath")))
             {
                 MessageBox.Show("Please select a Git, Graphviz & Git repository.", "Generate", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -116,17 +118,17 @@ namespace GitVersionTree
 
         private void RefreshPath()
         {
-            if (!String.IsNullOrEmpty(Reg.Read("GitPath")))
+			if (!String.IsNullOrEmpty(configuration.Read("GitPath")))
             {
-                GitPathTextBox.Text = Reg.Read("GitPath");
+				GitPathTextBox.Text = configuration.Read("GitPath");
             }
-            if (!String.IsNullOrEmpty(Reg.Read("GraphvizPath")))
+			if (!String.IsNullOrEmpty(configuration.Read("GraphvizPath")))
             {
-                GraphvizDotPathTextBox.Text = Reg.Read("GraphvizPath");
+				GraphvizDotPathTextBox.Text = configuration.Read("GraphvizPath");
             }
-            if (!String.IsNullOrEmpty(Reg.Read("GitRepositoryPath")))
+			if (!String.IsNullOrEmpty(configuration.Read("GitRepositoryPath")))
             {
-                GitRepositoryPathTextBox.Text = Reg.Read("GitRepositoryPath");
+				GitRepositoryPathTextBox.Text = configuration.Read("GitRepositoryPath");
             }
         }
 
@@ -140,6 +142,8 @@ namespace GitVersionTree
 
         private string Execute(string Command, string Argument)
         {
+			Status ("Executing: " + Command + Argument);
+
             string ExecuteResult = String.Empty;
             Process ExecuteProcess = new Process();
             ExecuteProcess.StartInfo.UseShellExecute = false;
@@ -168,7 +172,11 @@ namespace GitVersionTree
             string[] MergedParents;
 
             Status("Getting git commit(s) ...");
-            Result = Execute(Reg.Read("GitPath"), "--git-dir \"" + Reg.Read("GitRepositoryPath") + "\\.git\" log --all --pretty=format:\"%h|%p|%d\"");
+
+			string git_path = configuration.Read ("GitPath");
+			string git_cmd_line_base = " --git-dir \"" + configuration.Read("GitRepositoryPath") +  Path.DirectorySeparatorChar + ".git\"";
+
+			Result = Execute(git_path, git_cmd_line_base + " log --all --pretty=format:\"%h|%p|%d\"");
             if (String.IsNullOrEmpty(Result))
             {
                 Status("Unable to get get branch or branch empty ...");
@@ -190,7 +198,7 @@ namespace GitVersionTree
             }
 
             Status("Getting git ref branch(es) ...");
-            Result = Execute(Reg.Read("GitPath"), "--git-dir \"" + Reg.Read("GitRepositoryPath") + "\\.git\" for-each-ref --format=\"%(objectname:short)|%(refname:short)\" "); //refs/heads/
+			Result = Execute(git_path, git_cmd_line_base + " for-each-ref --format=\"%(objectname:short)|%(refname:short)\" "); //refs/heads/
             if (String.IsNullOrEmpty(Result))
             {
                 Status("Unable to get get branch or branch empty ...");
@@ -208,7 +216,7 @@ namespace GitVersionTree
                         if (!RefColumns[1].ToLower().StartsWith("refs/tags"))
                         if (RefColumns[1].ToLower().Contains("master"))
                         {
-                            Result = Execute(Reg.Read("GitPath"), "--git-dir \"" + Reg.Read("GitRepositoryPath") + "\\.git\" log --reverse --first-parent --pretty=format:\"%h\" " + RefColumns[0]);
+							Result = Execute(git_path, git_cmd_line_base + " log --reverse --first-parent --pretty=format:\"%h\" " + RefColumns[0]);
                             if (String.IsNullOrEmpty(Result))
                             {
                                 Status("Unable to get commit(s) ...");
@@ -233,7 +241,7 @@ namespace GitVersionTree
                         if (!RefColumns[1].ToLower().StartsWith("refs/tags"))
                         if (!RefColumns[1].ToLower().Contains("master"))
                         {
-                            Result = Execute(Reg.Read("GitPath"), "--git-dir \"" + Reg.Read("GitRepositoryPath") + "\\.git\" log --reverse --first-parent --pretty=format:\"%h\" " + RefColumns[0]);
+							Result = Execute(git_path, git_cmd_line_base + " log --reverse --first-parent --pretty=format:\"%h\" " + RefColumns[0]);
                             if (String.IsNullOrEmpty(Result))
                             {
                                 Status("Unable to get commit(s) ...");
@@ -253,7 +261,7 @@ namespace GitVersionTree
             }
 
             Status("Getting git merged branch(es) ...");
-            Result = Execute(Reg.Read("GitPath"), "--git-dir \"" + Reg.Read("GitRepositoryPath") + "\\.git\" log --all --merges --pretty=format:\"%h|%p\"");
+			Result = Execute(git_path, git_cmd_line_base + " log --all --merges --pretty=format:\"%h|%p\"");
             if (String.IsNullOrEmpty(Result))
             {
                 Status("Unable to get get branch or branch empty ...");
@@ -271,7 +279,7 @@ namespace GitVersionTree
                     {
                         for (int i = 1; i < MergedParents.Length; i++)
                         {
-                            Result = Execute(Reg.Read("GitPath"), "--git-dir \"" + Reg.Read("GitRepositoryPath") + "\\.git\" log --reverse --first-parent --pretty=format:\"%h\" " + MergedParents[i]);
+							Result = Execute(git_path, git_cmd_line_base + " log --reverse --first-parent --pretty=format:\"%h\" " + MergedParents[i]);
                             if (String.IsNullOrEmpty(Result))
                             {
                                 Status("Unable to get commit(s) ...");
